@@ -30,7 +30,7 @@ export default function Home() {
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
               <h1 className="text-4xl md:text-5xl font-bold text-[#F5F5DC] font-serif mb-2 tracking-wide">
-                Wawata Weed Management
+                Wawata Weed Management v2
               </h1>
               <p className="text-[#8D6E63] text-lg italic bg-[#F5F5DC]/10 px-3 py-1 rounded inline-block">
                 "Kaitiaki of the Land"

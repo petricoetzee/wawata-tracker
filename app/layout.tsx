@@ -14,7 +14,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Wawata Weed Management",
+  title: "Wawata Weed Management v2",
   description: "Kaitiaki Weed Management Tracker",
 };
 
