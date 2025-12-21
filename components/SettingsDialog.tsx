@@ -69,47 +69,47 @@ export default function SettingsDialog({ open, onOpenChange, onUpdate }: Setting
         onOpenChange(isOpen);
     };
 
-    const handleAddSite = () => {
+    const handleAddSite = async () => {
         if (newSite.trim()) {
-            addSite(newSite.trim());
+            await addSite(newSite.trim());
             setSites(getSites());
             setNewSite("");
             onUpdate();
         }
     };
 
-    const handleDeleteSite = (site: string) => {
-        deleteSite(site);
+    const handleDeleteSite = async (site: string) => {
+        await deleteSite(site);
         setSites(getSites());
         onUpdate();
     };
 
-    const handleAddSpecies = () => {
+    const handleAddSpecies = async () => {
         if (newSpecies.trim()) {
-            addSpecies(newSpecies.trim());
+            await addSpecies(newSpecies.trim());
             setSpecies(getSpecies());
             setNewSpecies("");
             onUpdate();
         }
     };
 
-    const handleDeleteSpecies = (spec: string) => {
-        deleteSpecies(spec);
+    const handleDeleteSpecies = async (spec: string) => {
+        await deleteSpecies(spec);
         setSpecies(getSpecies());
         onUpdate();
     };
 
-    const handleAddPerson = () => {
+    const handleAddPerson = async () => {
         if (newPerson.trim()) {
-            addPerson(newPerson.trim());
+            await addPerson(newPerson.trim());
             setPeople(getPeople());
             setNewPerson("");
             onUpdate();
         }
     };
 
-    const handleDeletePerson = (person: string) => {
-        deletePerson(person);
+    const handleDeletePerson = async (person: string) => {
+        await deletePerson(person);
         setPeople(getPeople());
         onUpdate();
     };

@@ -1,146 +1,215 @@
+import { supabase } from './supabase';
+
 export interface LogEntry {
     id: string;
-    date: Date; // stored as Date object
+    date: Date;
     name: string;
     targetSpecies: string;
     site: string;
     hours: number;
 }
 
-const STORAGE_KEY = 'wawata-data';
+// In-Memory Cache (kept in sync with Supabase)
+let entries: LogEntry[] = [];
+let sites: string[] = [];
+let species: string[] = [];
+let people: string[] = [];
 
-// Default Seed Data
-const defaultEntries: LogEntry[] = [
-    {
-        id: "1",
-        date: new Date(),
-        name: "Kaitiaki 1",
-        targetSpecies: "Old Man's Beard",
-        site: "River Bank",
-        hours: 2.5,
-    },
-];
+// --- LOAD DATA ---
 
-const defaultSites = ["River Bank", "Forest Edge", "Wetland", "Home Paddock"];
-const defaultSpecies = ["Old Man's Beard", "Banana Passionfruit", "Woolly Nightshade", "Gorse", "Blackberry"];
-const defaultPeople = ["Kaitiaki 1", "Volunteer A", "Volunteer B"];
+export async function loadFromStorage() {
+    try {
+        // Fetch Entries
+        const { data: entriesData, error: entriesError } = await supabase
+            .from('entries')
+            .select('*');
 
-// In-Memory State
-let entries: LogEntry[] = [...defaultEntries];
-let sites: string[] = [...defaultSites];
-let species: string[] = [...defaultSpecies];
-let people: string[] = [...defaultPeople];
+        if (entriesError) throw entriesError;
 
-function saveToStorage() {
-    if (typeof window === 'undefined') return;
-    const data = {
-        entries,
-        sites,
-        species,
-        people
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
-export function loadFromStorage() {
-    if (typeof window === 'undefined') return;
-
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-        try {
-            const parsed = JSON.parse(saved);
-
-            // Restore Entries (reviving Dates)
-            if (Array.isArray(parsed.entries)) {
-                entries = parsed.entries.map((e: any) => ({
-                    ...e,
-                    date: new Date(e.date)
-                }));
-            }
-
-            // Restore Lists
-            if (Array.isArray(parsed.sites)) sites = parsed.sites;
-            if (Array.isArray(parsed.species)) species = parsed.species;
-            if (Array.isArray(parsed.people)) people = parsed.people;
-
-        } catch (error) {
-            console.error("Failed to load Wawata data", error);
+        if (entriesData) {
+            entries = entriesData.map((e: any) => ({
+                id: e.id,
+                date: new Date(e.date),
+                name: e.name,
+                targetSpecies: e.target_species, // map snake_case from DB
+                site: e.site,
+                hours: e.hours
+            }));
         }
-    } else {
-        // No data found, initialize storage with defaults
-        saveToStorage();
+
+        // Fetch Sites
+        const { data: sitesData, error: sitesError } = await supabase
+            .from('sites')
+            .select('name');
+        if (sitesError) throw sitesError;
+        if (sitesData) sites = sitesData.map((s: any) => s.name);
+
+        // Fetch Species
+        const { data: speciesData, error: speciesError } = await supabase
+            .from('species')
+            .select('name');
+        if (speciesError) throw speciesError;
+        if (speciesData) species = speciesData.map((s: any) => s.name);
+
+        // Fetch People
+        const { data: peopleData, error: peopleError } = await supabase
+            .from('people')
+            .select('name');
+        if (peopleError) throw peopleError;
+        if (peopleData) people = peopleData.map((p: any) => p.name);
+
+    } catch (error) {
+        console.error("Failed to load Wawata data from Supabase:", error);
     }
 }
+
+// --- ENTRIES ---
 
 export function getEntries(): LogEntry[] {
     return entries;
 }
 
-export function addEntry(entry: Omit<LogEntry, "id">) {
-    const newEntry = { ...entry, id: Math.random().toString(36).substr(2, 9) };
+export async function addEntry(entry: Omit<LogEntry, "id">) {
+    const dbEntry = {
+        date: entry.date.toISOString(),
+        name: entry.name,
+        target_species: entry.targetSpecies,
+        site: entry.site,
+        hours: entry.hours
+    };
+
+    const { data, error } = await supabase
+        .from('entries')
+        .insert([dbEntry])
+        .select()
+        .single();
+
+    if (error) {
+        console.error("Error adding entry:", error);
+        return null;
+    }
+
+    const newEntry: LogEntry = {
+        ...entry,
+        id: data.id,
+    };
     entries.push(newEntry);
-    saveToStorage();
     return newEntry;
 }
 
-export function updateEntry(id: string, updatedData: Partial<LogEntry>) {
+export async function updateEntry(id: string, updatedData: Partial<LogEntry>) {
+    const dbUpdate: any = {};
+    if (updatedData.date) dbUpdate.date = updatedData.date.toISOString();
+    if (updatedData.name) dbUpdate.name = updatedData.name;
+    if (updatedData.targetSpecies) dbUpdate.target_species = updatedData.targetSpecies;
+    if (updatedData.site) dbUpdate.site = updatedData.site;
+    if (updatedData.hours) dbUpdate.hours = updatedData.hours;
+
+    const { error } = await supabase
+        .from('entries')
+        .update(dbUpdate)
+        .eq('id', id);
+
+    if (error) {
+        console.error("Error updating entry:", error);
+        return;
+    }
+
     entries = entries.map(entry =>
         entry.id === id ? { ...entry, ...updatedData } : entry
     );
-    saveToStorage();
 }
 
-export function deleteEntry(id: string) {
+export async function deleteEntry(id: string) {
+    const { error } = await supabase
+        .from('entries')
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error("Error deleting entry:", error);
+        return;
+    }
+
     entries = entries.filter(entry => entry.id !== id);
-    saveToStorage();
 }
 
-// Management Functions
+// --- SITES ---
+
 export function getSites(): string[] {
     return [...sites];
 }
 
-export function addSite(site: string) {
+export async function addSite(site: string) {
     if (!sites.includes(site)) {
+        const { error } = await supabase.from('sites').insert([{ name: site }]);
+        if (error) {
+            console.error("Error adding site:", error);
+            return;
+        }
         sites.push(site);
-        saveToStorage();
     }
 }
 
-export function deleteSite(site: string) {
+export async function deleteSite(site: string) {
+    const { error } = await supabase.from('sites').delete().eq('name', site);
+    if (error) {
+        console.error("Error deleting site:", error);
+        return;
+    }
     sites = sites.filter(s => s !== site);
-    saveToStorage();
 }
+
+// --- SPECIES ---
 
 export function getSpecies(): string[] {
     return [...species];
 }
 
-export function addSpecies(specie: string) {
+export async function addSpecies(specie: string) {
     if (!species.includes(specie)) {
+        const { error } = await supabase.from('species').insert([{ name: specie }]);
+        if (error) {
+            console.error("Error adding species:", error);
+            return;
+        }
         species.push(specie);
-        saveToStorage();
     }
 }
 
-export function deleteSpecies(specie: string) {
+export async function deleteSpecies(specie: string) {
+    const { error } = await supabase.from('species').delete().eq('name', specie);
+    if (error) {
+        console.error("Error deleting species:", error);
+        return;
+    }
     species = species.filter(s => s !== specie);
-    saveToStorage();
 }
+
+// --- PEOPLE ---
 
 export function getPeople(): string[] {
     return [...people];
 }
 
-export function addPerson(person: string) {
+export async function addPerson(person: string) {
     if (!people.includes(person)) {
+        const { error } = await supabase.from('people').insert([{ name: person }]);
+        if (error) {
+            console.error("Error adding person:", error);
+            return;
+        }
         people.push(person);
-        saveToStorage();
     }
 }
 
-export function deletePerson(person: string) {
+export async function deletePerson(person: string) {
+    const { error } = await supabase.from('people').delete().eq('name', person);
+    if (error) {
+        console.error("Error deleting person:", error);
+        return;
+    }
     people = people.filter(p => p !== person);
-    saveToStorage();
 }
+
 

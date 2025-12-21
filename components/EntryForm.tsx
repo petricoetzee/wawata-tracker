@@ -46,9 +46,9 @@ export default function EntryForm({ open, onOpenChange, defaultDate, initialData
         }
     }, [initialData, open]);
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         if (initialData) {
-            updateEntry(initialData.id, {
+            await updateEntry(initialData.id, {
                 date: defaultDate || new Date(), // Keep date or allow changing? Assuming keeping date or using passed date context
                 name,
                 targetSpecies,
@@ -56,7 +56,7 @@ export default function EntryForm({ open, onOpenChange, defaultDate, initialData
                 hours: parseFloat(hours) || 0,
             });
         } else {
-            addEntry({
+            await addEntry({
                 date: defaultDate || new Date(),
                 name,
                 targetSpecies,
@@ -70,9 +70,9 @@ export default function EntryForm({ open, onOpenChange, defaultDate, initialData
         if (!initialData) setHours(""); // Reset only if adding new
     };
 
-    const handleDelete = () => {
+    const handleDelete = async () => {
         if (initialData && confirm("Are you sure you want to delete this entry?")) {
-            deleteEntry(initialData.id);
+            await deleteEntry(initialData.id);
             onOpenChange(false);
             onSave();
         }
