@@ -1,215 +1,90 @@
 import { supabase } from './supabase';
 
-export interface LogEntry {
-    id: string;
-    date: Date;
-    name: string;
-    targetSpecies: string;
-    site: string;
+// --- Types ---
+export interface Entry {
+    id?: string;
+    date: string;
     hours: number;
+    species_name: string;
+    site_name: string;
+    person_name: string;
+    notes: string;
 }
 
-// In-Memory Cache (kept in sync with Supabase)
-let entries: LogEntry[] = [];
-let sites: string[] = [];
-let species: string[] = [];
-let people: string[] = [];
+// --- Entries Logic (The Fix) ---
 
-// --- LOAD DATA ---
+export const getEntries = async () => {
+    // We order by DATE now, because "name" doesn't exist on this table
+    const { data, error } = await supabase
+        .from('entries')
+        .select('*')
+        .order('date', { ascending: false });
 
-export async function loadFromStorage() {
-    try {
-        // Fetch Entries
-        const { data: entriesData, error: entriesError } = await supabase
-            .from('entries')
-            .select('*');
-
-        if (entriesError) throw entriesError;
-
-        if (entriesData) {
-            entries = entriesData.map((e: any) => ({
-                id: e.id,
-                date: new Date(e.date),
-                name: e.name,
-                targetSpecies: e.target_species, // map snake_case from DB
-                site: e.site,
-                hours: e.hours
-            }));
-        }
-
-        // Fetch Sites
-        const { data: sitesData, error: sitesError } = await supabase
-            .from('sites')
-            .select('name');
-        if (sitesError) throw sitesError;
-        if (sitesData) sites = sitesData.map((s: any) => s.name);
-
-        // Fetch Species
-        const { data: speciesData, error: speciesError } = await supabase
-            .from('species')
-            .select('name');
-        if (speciesError) throw speciesError;
-        if (speciesData) species = speciesData.map((s: any) => s.name);
-
-        // Fetch People
-        const { data: peopleData, error: peopleError } = await supabase
-            .from('people')
-            .select('name');
-        if (peopleError) throw peopleError;
-        if (peopleData) people = peopleData.map((p: any) => p.name);
-
-    } catch (error) {
-        console.error("Failed to load Wawata data from Supabase:", error);
+    if (error) {
+        console.error('Error fetching entries:', error);
+        throw error;
     }
-}
+    return data || [];
+};
 
-// --- ENTRIES ---
-
-export function getEntries(): LogEntry[] {
-    return entries;
-}
-
-export async function addEntry(entry: Omit<LogEntry, "id">) {
-    const dbEntry = {
-        date: entry.date.toISOString(),
-        name: entry.name,
-        target_species: entry.targetSpecies,
-        site: entry.site,
-        hours: entry.hours
+export const saveEntry = async (entry: Entry) => {
+    // CLEANING THE DATA: We create a specific payload to ensure
+    // no ghost fields (like 'name') accidentally get sent to the DB.
+    const payload = {
+        date: entry.date,
+        hours: entry.hours,
+        species_name: entry.species_name,
+        site_name: entry.site_name,
+        person_name: entry.person_name || '', // Handle optional fields safely
+        notes: entry.notes || ''
     };
 
     const { data, error } = await supabase
         .from('entries')
-        .insert([dbEntry])
-        .select()
-        .single();
+        .insert(payload)
+        .select();
 
     if (error) {
-        console.error("Error adding entry:", error);
-        return null;
+        console.error('Error saving entry:', error);
+        throw error;
     }
+    return data;
+};
 
-    const newEntry: LogEntry = {
-        ...entry,
-        id: data.id,
-    };
-    entries.push(newEntry);
-    return newEntry;
-}
+export const deleteEntry = async (id: string) => {
+    const { error } = await supabase.from('entries').delete().eq('id', id);
+    if (error) throw error;
+};
 
-export async function updateEntry(id: string, updatedData: Partial<LogEntry>) {
-    const dbUpdate: any = {};
-    if (updatedData.date) dbUpdate.date = updatedData.date.toISOString();
-    if (updatedData.name) dbUpdate.name = updatedData.name;
-    if (updatedData.targetSpecies) dbUpdate.target_species = updatedData.targetSpecies;
-    if (updatedData.site) dbUpdate.site = updatedData.site;
-    if (updatedData.hours) dbUpdate.hours = updatedData.hours;
+// --- Config Logic (Sites, Species, People) ---
+// These tables DO have a 'name' column, so we keep this logic simple.
 
-    const { error } = await supabase
-        .from('entries')
-        .update(dbUpdate)
-        .eq('id', id);
+const getList = async (table: string) => {
+    const { data, error } = await supabase.from(table).select('*').order('name');
+    if (error) throw error;
+    return data || [];
+};
 
-    if (error) {
-        console.error("Error updating entry:", error);
-        return;
-    }
+const saveItem = async (table: string, name: string) => {
+    const { data, error } = await supabase.from(table).insert({ name }).select();
+    if (error) throw error;
+    return data;
+};
 
-    entries = entries.map(entry =>
-        entry.id === id ? { ...entry, ...updatedData } : entry
-    );
-}
+const deleteItem = async (table: string, id: string) => {
+    const { error } = await supabase.from(table).delete().eq('id', id);
+    if (error) throw error;
+};
 
-export async function deleteEntry(id: string) {
-    const { error } = await supabase
-        .from('entries')
-        .delete()
-        .eq('id', id);
+// Exports for the UI to use
+export const getSites = () => getList('sites');
+export const saveSite = (name: string) => saveItem('sites', name);
+export const deleteSite = (id: string) => deleteItem('sites', id);
 
-    if (error) {
-        console.error("Error deleting entry:", error);
-        return;
-    }
+export const getSpecies = () => getList('species');
+export const saveSpecies = (name: string) => saveItem('species', name);
+export const deleteSpecies = (id: string) => deleteItem('species', id);
 
-    entries = entries.filter(entry => entry.id !== id);
-}
-
-// --- SITES ---
-
-export function getSites(): string[] {
-    return [...sites];
-}
-
-export async function addSite(site: string) {
-    if (!sites.includes(site)) {
-        const { error } = await supabase.from('sites').insert([{ name: site }]);
-        if (error) {
-            console.error("Error adding site:", error);
-            return;
-        }
-        sites.push(site);
-    }
-}
-
-export async function deleteSite(site: string) {
-    const { error } = await supabase.from('sites').delete().eq('name', site);
-    if (error) {
-        console.error("Error deleting site:", error);
-        return;
-    }
-    sites = sites.filter(s => s !== site);
-}
-
-// --- SPECIES ---
-
-export function getSpecies(): string[] {
-    return [...species];
-}
-
-export async function addSpecies(specie: string) {
-    if (!species.includes(specie)) {
-        const { error } = await supabase.from('species').insert([{ name: specie }]);
-        if (error) {
-            console.error("Error adding species:", error);
-            return;
-        }
-        species.push(specie);
-    }
-}
-
-export async function deleteSpecies(specie: string) {
-    const { error } = await supabase.from('species').delete().eq('name', specie);
-    if (error) {
-        console.error("Error deleting species:", error);
-        return;
-    }
-    species = species.filter(s => s !== specie);
-}
-
-// --- PEOPLE ---
-
-export function getPeople(): string[] {
-    return [...people];
-}
-
-export async function addPerson(person: string) {
-    if (!people.includes(person)) {
-        const { error } = await supabase.from('people').insert([{ name: person }]);
-        if (error) {
-            console.error("Error adding person:", error);
-            return;
-        }
-        people.push(person);
-    }
-}
-
-export async function deletePerson(person: string) {
-    const { error } = await supabase.from('people').delete().eq('name', person);
-    if (error) {
-        console.error("Error deleting person:", error);
-        return;
-    }
-    people = people.filter(p => p !== person);
-}
-
-
+export const getPeople = () => getList('people');
+export const savePerson = (name: string) => saveItem('people', name);
+export const deletePerson = (id: string) => deleteItem('people', id);
