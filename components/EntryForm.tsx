@@ -1,77 +1,85 @@
 "use client";
+
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { addEntry, updateEntry, deleteEntry, getSites, getSpecies, getPeople, LogEntry } from "@/lib/data";
+// We import the specific functions that actually exist in your new data.ts
+import { saveEntry, deleteEntry, getSites, getSpecies, getPeople, Entry } from "@/lib/data";
 
 interface EntryFormProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     defaultDate?: Date;
-    initialData?: LogEntry | null;
+    initialData?: Entry | null; // We use the Entry type correctly now
     onSave: () => void;
-    refreshTrigger?: number; // Trigger re-fetching lists
+    refreshTrigger?: number;
 }
 
 export default function EntryForm({ open, onOpenChange, defaultDate, initialData, onSave, refreshTrigger }: EntryFormProps) {
-    const [name, setName] = useState("");
-    const [targetSpecies, setTargetSpecies] = useState("");
-    const [site, setSite] = useState("");
+    // 1. Updated State Names to match Database
+    const [personName, setPersonName] = useState("");
+    const [speciesName, setSpeciesName] = useState("");
+    const [siteName, setSiteName] = useState("");
     const [hours, setHours] = useState("");
 
-    const [availableSites, setAvailableSites] = useState<string[]>([]);
-    const [availableSpecies, setAvailableSpecies] = useState<string[]>([]);
-    const [availablePeople, setAvailablePeople] = useState<string[]>([]);
+    const [availableSites, setAvailableSites] = useState<any[]>([]);
+    const [availableSpecies, setAvailableSpecies] = useState<any[]>([]);
+    const [availablePeople, setAvailablePeople] = useState<any[]>([]);
 
     useEffect(() => {
-        setAvailableSites(getSites());
-        setAvailableSpecies(getSpecies());
-        setAvailablePeople(getPeople());
+        // Load the lists when the form opens
+        getSites().then(setAvailableSites);
+        getSpecies().then(setAvailableSpecies);
+        getPeople().then(setAvailablePeople);
     }, [open, refreshTrigger]);
 
     useEffect(() => {
         if (initialData) {
-            setName(initialData.name);
-            setTargetSpecies(initialData.targetSpecies);
-            setSite(initialData.site);
+            // 2. Map the incoming data to the right fields
+            setPersonName(initialData.person_name || "");
+            setSpeciesName(initialData.species_name || "");
+            setSiteName(initialData.site_name || "");
             setHours(initialData.hours.toString());
         } else {
-            setName("");
-            setTargetSpecies("");
-            setSite("");
+            // Reset form
+            setPersonName("");
+            setSpeciesName("");
+            setSiteName("");
             setHours("8");
         }
     }, [initialData, open]);
 
     const handleSubmit = async () => {
-        if (initialData) {
-            await updateEntry(initialData.id, {
-                date: defaultDate || new Date(), // Keep date or allow changing? Assuming keeping date or using passed date context
-                name,
-                targetSpecies,
-                site,
-                hours: parseFloat(hours) || 0,
-            });
-        } else {
-            await addEntry({
-                date: defaultDate || new Date(),
-                name,
-                targetSpecies,
-                site,
-                hours: parseFloat(hours) || 0,
-            });
-        }
+        // 3. Create the payload exactly how the database wants it
+        const entryPayload: Entry = {
+            id: initialData?.id, // Keep ID if editing
+            date: (defaultDate || new Date()).toISOString().split('T')[0], // Ensure YYYY-MM-DD string
+            person_name: personName,
+            species_name: speciesName,
+            site_name: siteName,
+            hours: parseFloat(hours) || 0,
+            notes: initialData?.notes || ""
+        };
+
+        // We use 'saveEntry' for both adding and editing (assuming insert for now)
+        await saveEntry(entryPayload);
 
         onOpenChange(false);
         onSave();
-        if (!initialData) setHours(""); // Reset only if adding new
+
+        // Clear form if it was a new entry
+        if (!initialData) {
+            setHours("");
+            setSpeciesName("");
+            setSiteName("");
+        }
     };
 
     const handleDelete = async () => {
-        if (initialData && confirm("Are you sure you want to delete this entry?")) {
+        if (initialData && initialData.id && confirm("Are you sure you want to delete this entry?")) {
             await deleteEntry(initialData.id);
             onOpenChange(false);
             onSave();
@@ -91,64 +99,61 @@ export default function EntryForm({ open, onOpenChange, defaultDate, initialData
                     </DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-6 py-6">
+
+                    {/* Person Selector */}
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="name" className={labelClasses}>
-                            Name
-                        </Label>
+                        <Label htmlFor="person" className={labelClasses}>Kaitiaki</Label>
                         <div className="col-span-3">
-                            <Select onValueChange={setName} value={name}>
+                            <Select onValueChange={setPersonName} value={personName}>
                                 <SelectTrigger className={selectTriggerClasses}>
                                     <SelectValue placeholder="Select kaitiaki" />
                                 </SelectTrigger>
                                 <SelectContent className="bg-white border-2 border-[#8D6E63]">
-                                    {availablePeople.map(p => (
-                                        <SelectItem key={p} value={p}>{p}</SelectItem>
+                                    {availablePeople.map((p: any) => (
+                                        <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
                     </div>
 
+                    {/* Site Selector */}
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="site" className={labelClasses}>
-                            Site
-                        </Label>
+                        <Label htmlFor="site" className={labelClasses}>Site</Label>
                         <div className="col-span-3">
-                            <Select onValueChange={setSite} value={site}>
+                            <Select onValueChange={setSiteName} value={siteName}>
                                 <SelectTrigger className={selectTriggerClasses}>
                                     <SelectValue placeholder="Select site" />
                                 </SelectTrigger>
                                 <SelectContent className="bg-white border-2 border-[#8D6E63]">
-                                    {availableSites.map(s => (
-                                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                                    {availableSites.map((s: any) => (
+                                        <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
                     </div>
 
+                    {/* Species Selector */}
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="species" className={labelClasses}>
-                            Species
-                        </Label>
+                        <Label htmlFor="species" className={labelClasses}>Species</Label>
                         <div className="col-span-3">
-                            <Select onValueChange={setTargetSpecies} value={targetSpecies}>
+                            <Select onValueChange={setSpeciesName} value={speciesName}>
                                 <SelectTrigger className={selectTriggerClasses}>
                                     <SelectValue placeholder="Select species" />
                                 </SelectTrigger>
                                 <SelectContent className="bg-white border-2 border-[#8D6E63]">
-                                    {availableSpecies.map(s => (
-                                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                                    {availableSpecies.map((s: any) => (
+                                        <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
                     </div>
 
+                    {/* Hours Input */}
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="hours" className={labelClasses}>
-                            Hours
-                        </Label>
+                        <Label htmlFor="hours" className={labelClasses}>Hours</Label>
                         <Input
                             id="hours"
                             type="number"
@@ -161,11 +166,7 @@ export default function EntryForm({ open, onOpenChange, defaultDate, initialData
                 </div>
                 <DialogFooter className="flex justify-between sm:justify-between w-full">
                     {initialData ? (
-                        <Button
-                            variant="destructive"
-                            onClick={handleDelete}
-                            className="bg-red-700 hover:bg-red-800 text-white font-bold px-4"
-                        >
+                        <Button variant="destructive" onClick={handleDelete} className="bg-red-700 hover:bg-red-800 text-white font-bold px-4">
                             Delete Entry
                         </Button>
                     ) : <div></div>}
