@@ -1,145 +1,114 @@
 "use client";
+
 import { useState } from "react";
-import { format, startOfWeek, endOfWeek, eachDayOfInterval, startOfMonth, endOfMonth, isSameDay } from "date-fns";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, getDay } from "date-fns";
+import { ChevronLeft, ChevronRight, MoreHorizontal, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getEntries, LogEntry } from "@/lib/data";
-import EntryForm from "./EntryForm";
-import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Entry } from "@/lib/data"; // Import the shared type
 
-export default function CalendarView({ refreshTrigger }: { refreshTrigger: number }) {
+interface CalendarViewProps {
+    entries: Entry[];
+    onEdit: (entry: Entry) => void;
+    onDelete: (id: string) => void;
+}
+
+export default function CalendarView({ entries, onEdit, onDelete }: CalendarViewProps) {
     const [currentDate, setCurrentDate] = useState(new Date());
-    const [view, setView] = useState<"weekly" | "monthly">("monthly");
-    const [isEntryOpen, setIsEntryOpen] = useState(false);
-    const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-    const [editingEntry, setEditingEntry] = useState<LogEntry | null>(null);
 
-    // Internal refresh for immediate UI update after save, parent refreshTrigger handles global updates (like settings)
-    const [internalRefresh, setInternalRefresh] = useState(0);
+    const firstDayOfMonth = startOfMonth(currentDate);
+    const lastDayOfMonth = endOfMonth(currentDate);
+    const daysInMonth = eachDayOfInterval({ start: firstDayOfMonth, end: lastDayOfMonth });
 
-    const entries = getEntries();
+    const startDayIndex = getDay(firstDayOfMonth);
+    const previousMonthDays = Array.from({ length: startDayIndex }).map((_, i) => i);
 
-    const days = view === "weekly"
-        ? eachDayOfInterval({ start: startOfWeek(currentDate), end: endOfWeek(currentDate) })
-        : eachDayOfInterval({ start: startOfMonth(currentDate), end: endOfMonth(currentDate) });
+    const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
+    const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
 
-    const handlePrev = () => {
-        const newDate = new Date(currentDate);
-        if (view === "weekly") newDate.setDate(newDate.getDate() - 7);
-        else newDate.setMonth(newDate.getMonth() - 1);
-        setCurrentDate(newDate);
-    };
-
-    const handleNext = () => {
-        const newDate = new Date(currentDate);
-        if (view === "weekly") newDate.setDate(newDate.getDate() + 7);
-        else newDate.setMonth(newDate.getMonth() + 1);
-        setCurrentDate(newDate);
-    };
-
-    const openNewEntry = (date: Date) => {
-        setEditingEntry(null);
-        setSelectedDate(date);
-        setIsEntryOpen(true);
-    };
-
-    const openEditEntry = (entry: LogEntry, e: React.MouseEvent) => {
-        e.stopPropagation();
-        setEditingEntry(entry);
-        setSelectedDate(new Date(entry.date)); // Keep date context
-        setIsEntryOpen(true);
-    };
-
-    const DayCell = ({ date }: { date: Date }) => {
-        const dayEntries = entries.filter(e => isSameDay(new Date(e.date), date));
-        const totalHours = dayEntries.reduce((acc, curr) => acc + curr.hours, 0);
-
-        return (
-            <div
-                className="min-h-[140px] bg-white border border-stone-300 rounded-lg p-3 flex flex-col relative group hover:border-[#1A3C34] hover:shadow-lg transition-all duration-200 shadow-md cursor-pointer"
-                onClick={() => openNewEntry(date)}
-            >
-                <div className="flex justify-between items-start mb-2">
-                    <span className={cn("text-lg font-bold font-serif", isSameDay(date, new Date()) ? "text-[#1A3C34] underline decoration-[#8D6E63] decoration-2" : "text-stone-500")}>
-                        {format(date, "d")}
-                    </span>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity bg-[#1A3C34]/10 hover:bg-[#1A3C34] hover:text-[#F5F5DC] rounded-full"
-                        onClick={(e) => { e.stopPropagation(); openNewEntry(date); }}
-                    >
-                        <Plus className="h-4 w-4" />
-                    </Button>
-                </div>
-
-                <div className="flex-1 space-y-1.5 overflow-y-auto max-h-[90px] pr-1">
-                    {dayEntries.map(entry => (
-                        <div
-                            key={entry.id}
-                            onClick={(e) => openEditEntry(entry, e)}
-                            className="text-xs bg-[#F5F5DC] p-1.5 rounded border border-[#8D6E63]/30 text-[#1A3C34] font-medium truncate shadow-sm hover:bg-[#1A3C34] hover:text-[#F5F5DC] cursor-pointer transition-colors"
-                        >
-                            <span className="font-bold">{entry.hours}h</span> {entry.targetSpecies}
-                        </div>
-                    ))}
-                </div>
-                {totalHours > 0 && (
-                    <div className="mt-2 text-xs font-bold text-center text-[#F5F5DC] bg-[#8D6E63] rounded py-0.5 shadow-sm">
-                        {totalHours}h Total
-                    </div>
-                )}
-            </div>
-        );
+    // Helper to find entries for a specific day
+    const getEntriesForDay = (date: Date) => {
+        return entries.filter(entry => {
+            // Handle both string dates (YYYY-MM-DD) and Date objects safely
+            const entryDate = typeof entry.date === 'string' ? new Date(entry.date) : entry.date;
+            // Adjust for timezone offset if needed, or stick to simple string comparison
+            const dateString = format(date, 'yyyy-MM-dd');
+            return entry.date.toString().startsWith(dateString);
+        });
     };
 
     return (
-        <Card className="border-none shadow-none bg-transparent">
-            <CardHeader className="flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0 pb-6 bg-[#1A3C34]/5 rounded-t-xl border border-stone-200 border-b-0 p-6">
-                <div className="flex items-center space-x-4">
-                    <Button variant="outline" size="icon" onClick={handlePrev} className="bg-white border-stone-300 hover:bg-[#F5F5DC]"><ChevronLeft className="h-4 w-4" /></Button>
-                    <CardTitle className="text-2xl font-serif text-[#1A3C34] min-w-[200px] text-center font-bold">
-                        {format(currentDate, "MMMM yyyy")}
-                    </CardTitle>
-                    <Button variant="outline" size="icon" onClick={handleNext} className="bg-white border-stone-300 hover:bg-[#F5F5DC]"><ChevronRight className="h-4 w-4" /></Button>
-                </div>
-                <div className="flex bg-white p-1 rounded-lg border border-stone-300 shadow-sm">
-                    <Button
-                        variant="ghost"
-                        onClick={() => setView("weekly")}
-                        className={cn("rounded-md px-6 font-bold transition-all", view === "weekly" ? "bg-[#1A3C34] text-[#F5F5DC] shadow-sm" : "text-[#1A3C34] hover:bg-[#F5F5DC]")}
-                    >
-                        Weekly
+        <div className="bg-[#F5F5DC] rounded-lg shadow-md border-2 border-[#8D6E63] overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 bg-[#1A3C34] text-[#F5F5DC]">
+                <h2 className="text-xl font-serif font-bold">{format(currentDate, "MMMM yyyy")}</h2>
+                <div className="flex gap-2">
+                    <Button variant="ghost" size="icon" onClick={prevMonth} className="hover:bg-[#F5F5DC]/20 text-[#F5F5DC]">
+                        <ChevronLeft className="h-5 w-5" />
                     </Button>
-                    <Button
-                        variant="ghost"
-                        onClick={() => setView("monthly")}
-                        className={cn("rounded-md px-6 font-bold transition-all", view === "monthly" ? "bg-[#1A3C34] text-[#F5F5DC] shadow-sm" : "text-[#1A3C34] hover:bg-[#F5F5DC]")}
-                    >
-                        Monthly
+                    <Button variant="ghost" size="icon" onClick={nextMonth} className="hover:bg-[#F5F5DC]/20 text-[#F5F5DC]">
+                        <ChevronRight className="h-5 w-5" />
                     </Button>
                 </div>
-            </CardHeader>
-            <CardContent className="bg-white/50 border border-stone-200 rounded-b-xl p-6 shadow-inset">
-                <div className={`grid gap-4 ${view === "monthly" ? "grid-cols-2 md:grid-cols-7" : "grid-cols-2 md:grid-cols-7"}`}>
-                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => (
-                        <div key={day} className="text-center text-sm font-bold text-[#8D6E63] uppercase tracking-wider mb-2">{day}</div>
-                    ))}
-                    {days.map(day => (
-                        <DayCell key={day.toISOString()} date={day} />
-                    ))}
-                </div>
-            </CardContent>
+            </div>
 
-            <EntryForm
-                open={isEntryOpen}
-                onOpenChange={setIsEntryOpen}
-                defaultDate={selectedDate}
-                initialData={editingEntry}
-                onSave={() => setInternalRefresh(prev => prev + 1)}
-                refreshTrigger={refreshTrigger}
-            />
-        </Card>
+            {/* Days Grid */}
+            <div className="grid grid-cols-7 text-center text-xs font-bold text-[#1A3C34] bg-[#D2B48C]/30 py-2 border-b-2 border-[#8D6E63]">
+                {["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map(day => (
+                    <div key={day}>{day}</div>
+                ))}
+            </div>
+
+            <div className="grid grid-cols-7 bg-[#F5F5DC]">
+                {/* Empty cells for previous month */}
+                {previousMonthDays.map((_, i) => (
+                    <div key={`empty-${i}`} className="h-32 border-b border-r border-[#8D6E63]/30 bg-stone-100/50" />
+                ))}
+
+                {/* Days of the month */}
+                {daysInMonth.map((date, i) => {
+                    const dayEntries = getEntriesForDay(date);
+                    const isToday = isSameDay(date, new Date());
+
+                    return (
+                        <div key={i} className={`h-32 border-b border-r border-[#8D6E63]/30 p-1 flex flex-col gap-1 transition-colors hover:bg-[#D2B48C]/10 ${isToday ? "bg-[#D2B48C]/20" : ""}`}>
+                            <div className={`text-right text-xs font-bold mb-1 mr-1 ${isToday ? "text-red-600" : "text-[#8D6E63]"}`}>
+                                {format(date, "d")}
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto space-y-1 custom-scrollbar">
+                                {dayEntries.map(entry => (
+                                    <div key={entry.id} className="group relative flex items-center justify-between bg-white border border-[#8D6E63]/50 rounded px-1.5 py-1 shadow-sm text-[10px]">
+                                        <div className="flex flex-col truncate">
+                                            <span className="font-bold text-[#1A3C34] truncate">{entry.species_name}</span>
+                                            <span className="text-stone-500 truncate">{entry.site_name}</span>
+                                            {/* FIX: Use person_name instead of name */}
+                                            <span className="text-stone-400 truncate text-[9px]">{entry.person_name}</span>
+                                        </div>
+
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <MoreHorizontal className="h-3 w-3 text-[#8D6E63]" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem onClick={() => onEdit(entry)}>
+                                                    <Edit className="mr-2 h-3 w-3" /> Edit
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem className="text-red-600" onClick={() => entry.id && onDelete(entry.id)}>
+                                                    <Trash2 className="mr-2 h-3 w-3" /> Delete
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
     );
 }
