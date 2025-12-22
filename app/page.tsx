@@ -49,14 +49,29 @@ export default function ReportsPage() {
             <CardHeader className="pb-2"><CardTitle className="text-sm font-medium opacity-80">Total Hours Logged</CardTitle></CardHeader>
             <CardContent><div className="text-4xl font-bold">{totalHours.toFixed(1)}</div></CardContent>
           </Card>
+          <Card className="bg-white">
+            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-stone-500">Total Entries</CardTitle></CardHeader>
+            <CardContent><div className="text-4xl font-bold text-[#1A3C34]">{entries.length}</div></CardContent>
+          </Card>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Charts omitted for brevity, but data is safe now */}
           <Card>
             <CardHeader><CardTitle className="font-serif text-[#1A3C34]">Hours by Species</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               {Object.entries(bySpecies).map(([name, hours]) => (
+                <div key={name} className="flex items-center justify-between">
+                  <span className="font-medium text-[#1A3C34]">{name}</span>
+                  <span className="text-stone-600">{hours.toFixed(1)} h</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="font-serif text-[#1A3C34]">Hours by Site</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              {Object.entries(bySite).map(([name, hours]) => (
                 <div key={name} className="flex items-center justify-between">
                   <span className="font-medium text-[#1A3C34]">{name}</span>
                   <span className="text-stone-600">{hours.toFixed(1)} h</span>
