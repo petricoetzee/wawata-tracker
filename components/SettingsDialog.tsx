@@ -1,10 +1,18 @@
 "use client";
+
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Trash2, Plus } from "lucide-react";
-import { getSites, addSite, deleteSite, getSpecies, addSpecies, deleteSpecies, getPeople, addPerson, deletePerson } from "@/lib/data";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, Trash2 } from "lucide-react";
+// Import the new Supabase functions
+import {
+    getSites, saveSite, deleteSite,
+    getSpecies, saveSpecies, deleteSpecies,
+    getPeople, savePerson, deletePerson
+} from "@/lib/data";
 
 interface SettingsDialogProps {
     open: boolean;
@@ -12,148 +20,142 @@ interface SettingsDialogProps {
     onUpdate: () => void;
 }
 
-// Sub-component defined outside to prevent re-mounting on parent state changes
-const ListSection = ({ title, items, newItemValue, onNewItemChange, onAdd, onDelete, placeholder }: any) => (
-    <section className="space-y-4">
-        <h3 className="text-xl font-serif font-bold text-[#1A3C34]">{title}</h3>
-        <div className="flex gap-2">
-            <Input
-                value={newItemValue}
-                onChange={(e) => onNewItemChange(e.target.value)}
-                placeholder={placeholder}
-                className="bg-white border-2 border-[#8D6E63] text-[#1A3C34]"
-            />
-            <Button onClick={onAdd} className="bg-[#1A3C34] text-[#F5F5DC] hover:bg-[#1A3C34]/90">
-                <Plus className="h-4 w-4 mr-1" /> Add
-            </Button>
-        </div>
-        <div className="space-y-2 max-h-[150px] overflow-y-auto pr-2">
-            {items.map((item: string) => (
-                <div key={item} className="flex items-center justify-between bg-white/50 p-2 rounded border border-stone-300">
-                    <span className="font-medium text-[#1A3C34]">{item}</span>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onDelete(item)}
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0"
-                    >
-                        <Trash2 className="h-4 w-4" />
-                    </Button>
-                </div>
-            ))}
-        </div>
-    </section>
-);
-
 export default function SettingsDialog({ open, onOpenChange, onUpdate }: SettingsDialogProps) {
-    // Initialize with empty arrays to prefer hydration from source of truth
-    const [sites, setSites] = useState<string[]>([]);
-    const [species, setSpecies] = useState<string[]>([]);
-    const [people, setPeople] = useState<string[]>([]);
+    const [activeTab, setActiveTab] = useState("people");
 
+    // Local state for the lists
+    const [people, setPeople] = useState<any[]>([]);
+    const [sites, setSites] = useState<any[]>([]);
+    const [species, setSpecies] = useState<any[]>([]);
+
+    // Inputs
+    const [newPerson, setNewPerson] = useState("");
     const [newSite, setNewSite] = useState("");
     const [newSpecies, setNewSpecies] = useState("");
-    const [newPerson, setNewPerson] = useState("");
 
-    // Sync with data source when opened
+    // Load data when dialog opens
     useEffect(() => {
         if (open) {
-            setSites(getSites());
-            setSpecies(getSpecies());
-            setPeople(getPeople());
+            loadAll();
         }
     }, [open]);
 
-    // Re-sync on open - kept for prop compatibility but logic moved to useEffect
-    const handleOpenChange = (isOpen: boolean) => {
-        onOpenChange(isOpen);
+    const loadAll = async () => {
+        const [p, s, sp] = await Promise.all([getPeople(), getSites(), getSpecies()]);
+        setPeople(p);
+        setSites(s);
+        setSpecies(sp);
+    };
+
+    // --- Handlers ---
+
+    const handleAddPerson = async () => {
+        if (!newPerson.trim()) return;
+        await savePerson(newPerson);
+        setNewPerson("");
+        loadAll();
+        onUpdate();
+    };
+
+    const handleDeletePerson = async (id: string) => {
+        await deletePerson(id);
+        loadAll();
+        onUpdate();
     };
 
     const handleAddSite = async () => {
-        if (newSite.trim()) {
-            await addSite(newSite.trim());
-            setSites(getSites());
-            setNewSite("");
-            onUpdate();
-        }
+        if (!newSite.trim()) return;
+        await saveSite(newSite);
+        setNewSite("");
+        loadAll();
+        onUpdate();
     };
 
-    const handleDeleteSite = async (site: string) => {
-        await deleteSite(site);
-        setSites(getSites());
+    const handleDeleteSite = async (id: string) => {
+        await deleteSite(id);
+        loadAll();
         onUpdate();
     };
 
     const handleAddSpecies = async () => {
-        if (newSpecies.trim()) {
-            await addSpecies(newSpecies.trim());
-            setSpecies(getSpecies());
-            setNewSpecies("");
-            onUpdate();
-        }
-    };
-
-    const handleDeleteSpecies = async (spec: string) => {
-        await deleteSpecies(spec);
-        setSpecies(getSpecies());
+        if (!newSpecies.trim()) return;
+        await saveSpecies(newSpecies);
+        setNewSpecies("");
+        loadAll();
         onUpdate();
     };
 
-    const handleAddPerson = async () => {
-        if (newPerson.trim()) {
-            await addPerson(newPerson.trim());
-            setPeople(getPeople());
-            setNewPerson("");
-            onUpdate();
-        }
-    };
-
-    const handleDeletePerson = async (person: string) => {
-        await deletePerson(person);
-        setPeople(getPeople());
+    const handleDeleteSpecies = async (id: string) => {
+        await deleteSpecies(id);
+        loadAll();
         onUpdate();
     };
+
+    // --- Render Helper ---
+    const renderList = (items: any[], onDelete: (id: string) => void) => (
+        <div className="space-y-2 mt-4 max-h-[200px] overflow-y-auto custom-scrollbar">
+            {items.map((item) => (
+                <div key={item.id} className="flex items-center justify-between bg-white p-2 rounded border border-[#8D6E63]/30">
+                    <span className="text-[#1A3C34] font-medium">{item.name}</span>
+                    <Button variant="ghost" size="sm" onClick={() => onDelete(item.id)} className="text-red-500 hover:text-red-700 h-8 w-8 p-0">
+                        <Trash2 className="h-4 w-4" />
+                    </Button>
+                </div>
+            ))}
+            {items.length === 0 && <p className="text-sm text-stone-400 italic text-center py-2">No items yet.</p>}
+        </div>
+    );
+
+    const inputClasses = "bg-white border-[#8D6E63] text-[#1A3C34] placeholder:text-stone-400";
+    const buttonClasses = "bg-[#1A3C34] hover:bg-[#1A3C34]/90 text-[#F5F5DC]";
 
     return (
-        <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent className="bg-[#F5F5DC] border-[#8D6E63] border-2 shadow-xl sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="bg-[#F5F5DC] border-2 border-[#8D6E63] sm:max-w-[450px]">
                 <DialogHeader>
-                    <DialogTitle className="text-[#1A3C34] font-serif text-2xl font-bold border-b border-[#8D6E63]/30 pb-2">
-                        Configuration
-                    </DialogTitle>
+                    <DialogTitle className="text-[#1A3C34] font-serif text-2xl">Configuration</DialogTitle>
                 </DialogHeader>
 
-                <div className="space-y-8 py-4">
-                    <ListSection
-                        title="Manage Team Members"
-                        items={people}
-                        newItemValue={newPerson}
-                        onNewItemChange={setNewPerson}
-                        onAdd={handleAddPerson}
-                        onDelete={handleDeletePerson}
-                        placeholder="New Team Member Name"
-                    />
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                    <TabsList className="grid w-full grid-cols-3 bg-[#1A3C34]/10">
+                        <TabsTrigger value="people" className="data-[state=active]:bg-[#1A3C34] data-[state=active]:text-[#F5F5DC]">People</TabsTrigger>
+                        <TabsTrigger value="sites" className="data-[state=active]:bg-[#1A3C34] data-[state=active]:text-[#F5F5DC]">Sites</TabsTrigger>
+                        <TabsTrigger value="species" className="data-[state=active]:bg-[#1A3C34] data-[state=active]:text-[#F5F5DC]">Species</TabsTrigger>
+                    </TabsList>
 
-                    <ListSection
-                        title="Manage Sites"
-                        items={sites}
-                        newItemValue={newSite}
-                        onNewItemChange={setNewSite}
-                        onAdd={handleAddSite}
-                        onDelete={handleDeleteSite}
-                        placeholder="New Site Name"
-                    />
+                    {/* PEOPLE TAB */}
+                    <TabsContent value="people" className="py-4">
+                        <div className="flex gap-2">
+                            <Input placeholder="Add new person..." value={newPerson} onChange={(e) => setNewPerson(e.target.value)} className={inputClasses} />
+                            <Button onClick={handleAddPerson} className={buttonClasses}><Plus className="h-4 w-4" /></Button>
+                        </div>
+                        {renderList(people, handleDeletePerson)}
+                    </TabsContent>
 
-                    <ListSection
-                        title="Manage Species"
-                        items={species}
-                        newItemValue={newSpecies}
-                        onNewItemChange={setNewSpecies}
-                        onAdd={handleAddSpecies}
-                        onDelete={handleDeleteSpecies}
-                        placeholder="New Species Name"
-                    />
-                </div>
+                    {/* SITES TAB */}
+                    <TabsContent value="sites" className="py-4">
+                        <div className="flex gap-2">
+                            <Input placeholder="Add new site..." value={newSite} onChange={(e) => setNewSite(e.target.value)} className={inputClasses} />
+                            <Button onClick={handleAddSite} className={buttonClasses}><Plus className="h-4 w-4" /></Button>
+                        </div>
+                        {renderList(sites, handleDeleteSite)}
+                    </TabsContent>
+
+                    {/* SPECIES TAB */}
+                    <TabsContent value="species" className="py-4">
+                        <div className="flex gap-2">
+                            <Input placeholder="Add new species..." value={newSpecies} onChange={(e) => setNewSpecies(e.target.value)} className={inputClasses} />
+                            <Button onClick={handleAddSpecies} className={buttonClasses}><Plus className="h-4 w-4" /></Button>
+                        </div>
+                        {renderList(species, handleDeleteSpecies)}
+                    </TabsContent>
+                </Tabs>
+
+                <DialogFooter>
+                    <Button onClick={() => onOpenChange(false)} variant="outline" className="border-[#1A3C34] text-[#1A3C34] hover:bg-[#1A3C34]/10">
+                        Done
+                    </Button>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     );
