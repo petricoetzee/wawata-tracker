@@ -14,6 +14,7 @@ export default function Home() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isEntryFormOpen, setIsEntryFormOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
 
   // Initial load
   useEffect(() => {
@@ -31,11 +32,19 @@ export default function Home() {
 
   const handleCreate = () => {
     setEditingEntry(null);
+    setSelectedDate(new Date());
+    setIsEntryFormOpen(true);
+  };
+
+  const handleAddForDate = (date: Date) => {
+    setEditingEntry(null);
+    setSelectedDate(date);
     setIsEntryFormOpen(true);
   };
 
   const handleEdit = (entry: Entry) => {
     setEditingEntry(entry);
+    setSelectedDate(undefined); // Let the form use the entry's date
     setIsEntryFormOpen(true);
   };
 
@@ -79,7 +88,7 @@ export default function Home() {
             onClick={handleCreate}
             className="bg-[#1A3C34] text-[#F5F5DC] hover:bg-[#1A3C34]/90 gap-2 shadow-md w-full sm:w-auto font-bold"
           >
-            <Plus className="h-4 w-4" /> Log Entry
+            <Plus className="h-4 w-4" /> Log Today's Entry
           </Button>
         </div>
 
@@ -88,6 +97,7 @@ export default function Home() {
           entries={entries}
           onEdit={handleEdit}
           onDelete={handleDelete}
+          onAdd={handleAddForDate}
         />
       </main>
 
@@ -102,6 +112,7 @@ export default function Home() {
         open={isEntryFormOpen}
         onOpenChange={setIsEntryFormOpen}
         initialData={editingEntry}
+        defaultDate={selectedDate}
         onSave={refreshData}
       />
     </div>

@@ -12,9 +12,10 @@ interface CalendarViewProps {
     entries: Entry[];
     onEdit: (entry: Entry) => void;
     onDelete: (id: string) => void;
+    onAdd: (date: Date) => void;
 }
 
-export default function CalendarView({ entries, onEdit, onDelete }: CalendarViewProps) {
+export default function CalendarView({ entries, onEdit, onDelete, onAdd }: CalendarViewProps) {
     const [currentDate, setCurrentDate] = useState(new Date());
 
     const firstDayOfMonth = startOfMonth(currentDate);
@@ -72,14 +73,22 @@ export default function CalendarView({ entries, onEdit, onDelete }: CalendarView
                     const isToday = isSameDay(date, new Date());
 
                     return (
-                        <div key={i} className={`h-32 border-b border-r border-[#8D6E63]/30 p-1 flex flex-col gap-1 transition-colors hover:bg-[#D2B48C]/10 ${isToday ? "bg-[#D2B48C]/20" : ""}`}>
+                        <div
+                            key={i}
+                            onClick={() => onAdd(date)}
+                            className={`h-32 border-b border-r border-[#8D6E63]/30 p-1 flex flex-col gap-1 transition-colors hover:bg-[#D2B48C]/10 cursor-pointer ${isToday ? "bg-[#D2B48C]/20" : ""}`}
+                        >
                             <div className={`text-right text-xs font-bold mb-1 mr-1 ${isToday ? "text-red-600" : "text-[#8D6E63]"}`}>
                                 {format(date, "d")}
                             </div>
 
                             <div className="flex-1 overflow-y-auto space-y-1 custom-scrollbar">
                                 {dayEntries.map(entry => (
-                                    <div key={entry.id} className="group relative flex items-center justify-between bg-white border border-[#8D6E63]/50 rounded px-1.5 py-1 shadow-sm text-[10px]">
+                                    <div
+                                        key={entry.id}
+                                        className="group relative flex items-center justify-between bg-white border border-[#8D6E63]/50 rounded px-1.5 py-1 shadow-sm text-[10px]"
+                                        onClick={(e) => e.stopPropagation()} /* Prevent triggering onAdd when clicking entry */
+                                    >
                                         <div className="flex flex-col truncate">
                                             <span className="font-bold text-[#1A3C34] truncate">{entry.species_name}</span>
                                             <span className="text-stone-500 truncate">{entry.site_name}</span>
