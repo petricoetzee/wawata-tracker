@@ -1,86 +1,109 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { getEntries, Entry } from "@/lib/data";
+import { Plus, Settings, FileText } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import CalendarView from "@/components/CalendarView";
+import SettingsDialog from "@/components/SettingsDialog";
+import EntryForm from "@/components/EntryForm";
+import { getEntries, deleteEntry, Entry } from "@/lib/data";
 
-export default function ReportsPage() {
+export default function Home() {
   const [entries, setEntries] = useState<Entry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isEntryFormOpen, setIsEntryFormOpen] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
 
+  // Initial load
   useEffect(() => {
-    getEntries().then(data => {
-      setEntries(data);
-      setLoading(false);
-    });
+    refreshData();
   }, []);
 
-  const totalHours = entries.reduce((sum, e) => sum + Number(e.hours), 0);
+  const refreshData = async () => {
+    try {
+      const data = await getEntries();
+      setEntries(data);
+    } catch (error) {
+      console.error("Failed to load entries:", error);
+    }
+  };
 
-  const bySpecies = entries.reduce((acc, e) => {
-    const name = e.species_name || "Unknown";
-    acc[name] = (acc[name] || 0) + Number(e.hours);
-    return acc;
-  }, {} as Record<string, number>);
+  const handleCreate = () => {
+    setEditingEntry(null);
+    setIsEntryFormOpen(true);
+  };
 
-  const bySite = entries.reduce((acc, e) => {
-    const name = e.site_name || "Unknown";
-    acc[name] = (acc[name] || 0) + Number(e.hours);
-    return acc;
-  }, {} as Record<string, number>);
+  const handleEdit = (entry: Entry) => {
+    setEditingEntry(entry);
+    setIsEntryFormOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm("Are you sure you want to permanently delete this entry?")) {
+      await deleteEntry(id);
+      refreshData();
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-[#F5F5DC] p-6 font-sans">
-      <div className="max-w-4xl mx-auto space-y-8">
-        <div className="flex items-center gap-4">
-          <Link href="/">
-            <Button variant="ghost" className="hover:bg-[#1A3C34]/10">
-              <ArrowLeft className="h-5 w-5 mr-2" /> Back
-            </Button>
-          </Link>
-          <h1 className="text-3xl font-serif font-bold text-[#1A3C34]">Eradication Reports</h1>
+    <div className="min-h-screen bg-[#F5F5DC] text-[#1A3C34] font-sans">
+      {/* Header */}
+      <header className="bg-[#1A3C34] text-[#F5F5DC] p-4 shadow-lg sticky top-0 z-10">
+        <div className="max-w-6xl mx-auto flex justify-between items-center">
+          <h1 className="text-2xl font-serif font-bold tracking-wide">Wawata Cloud v2</h1>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsSettingsOpen(true)}
+            className="text-[#F5F5DC] hover:bg-[#F5F5DC]/20 hover:text-white transition-colors"
+            title="Configuration"
+          >
+            <Settings className="h-6 w-6" />
+          </Button>
+        </div>
+      </header>
+
+      <main className="max-w-6xl mx-auto p-4 md:p-6 space-y-6">
+        {/* Actions Bar */}
+        <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center bg-white p-4 rounded-lg border border-[#8D6E63]/30 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Link href="/reports">
+              <Button variant="outline" className="border-[#1A3C34] text-[#1A3C34] hover:bg-[#1A3C34]/10 gap-2 font-medium">
+                <FileText className="h-4 w-4" /> View Reports
+              </Button>
+            </Link>
+          </div>
+
+          <Button
+            onClick={handleCreate}
+            className="bg-[#1A3C34] text-[#F5F5DC] hover:bg-[#1A3C34]/90 gap-2 shadow-md w-full sm:w-auto font-bold"
+          >
+            <Plus className="h-4 w-4" /> Log Entry
+          </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="bg-[#1A3C34] text-[#F5F5DC]">
-            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium opacity-80">Total Hours Logged</CardTitle></CardHeader>
-            <CardContent><div className="text-4xl font-bold">{totalHours.toFixed(1)}</div></CardContent>
-          </Card>
-          <Card className="bg-white">
-            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-stone-500">Total Entries</CardTitle></CardHeader>
-            <CardContent><div className="text-4xl font-bold text-[#1A3C34]">{entries.length}</div></CardContent>
-          </Card>
-        </div>
+        {/* Calendar View */}
+        <CalendarView
+          entries={entries}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
+      </main>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <Card>
-            <CardHeader><CardTitle className="font-serif text-[#1A3C34]">Hours by Species</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              {Object.entries(bySpecies).map(([name, hours]) => (
-                <div key={name} className="flex items-center justify-between">
-                  <span className="font-medium text-[#1A3C34]">{name}</span>
-                  <span className="text-stone-600">{hours.toFixed(1)} h</span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+      {/* Dialogs */}
+      <SettingsDialog
+        open={isSettingsOpen}
+        onOpenChange={setIsSettingsOpen}
+        onUpdate={refreshData}
+      />
 
-          <Card>
-            <CardHeader><CardTitle className="font-serif text-[#1A3C34]">Hours by Site</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              {Object.entries(bySite).map(([name, hours]) => (
-                <div key={name} className="flex items-center justify-between">
-                  <span className="font-medium text-[#1A3C34]">{name}</span>
-                  <span className="text-stone-600">{hours.toFixed(1)} h</span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      <EntryForm
+        open={isEntryFormOpen}
+        onOpenChange={setIsEntryFormOpen}
+        initialData={editingEntry}
+        onSave={refreshData}
+      />
     </div>
   );
 }
