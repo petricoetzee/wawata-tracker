@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Plus, Settings, FileText } from "lucide-react";
+import { Plus, Settings, FileText, Gamepad2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import CalendarView from "@/components/CalendarView";
 import SettingsDialog from "@/components/SettingsDialog";
@@ -80,6 +80,11 @@ export default function Home() {
             <Link href="/reports">
               <Button variant="outline" className="border-[#1A3C34] text-[#1A3C34] hover:bg-[#1A3C34]/10 gap-2 font-medium">
                 <FileText className="h-4 w-4" /> View Reports
+              </Button>
+            </Link>
+            <Link href="/the-chase">
+              <Button variant="outline" className="border-[#1A3C34] text-[#1A3C34] hover:bg-[#1A3C34]/10 gap-2 font-medium">
+                <Gamepad2 className="h-4 w-4" /> The Chase
               </Button>
             </Link>
           </div>
